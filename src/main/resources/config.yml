@@ -1,0 +1,123 @@
+# ------------------------------------------------------------------------------
+#  MCImage - turn base64-encoded images into map art items with shareable IDs
+#
+#   /mcimage <base64>        create a map from an image (paste in parts if needed)
+#   /mcimage get <id>        get a copy of an existing image
+#   /mcimage help            everything else
+#
+#  Images never touch your worlds. Each image is stored as a 128x128 PNG in
+#  plugins/MCImage/images/<id>.png and shown on a locked map item.
+# ------------------------------------------------------------------------------
+
+# Length of generated image IDs (4-32). 6 characters = ~900 million IDs.
+id-length: 6
+
+# Seconds a player has to wait between two image creations. Admins bypass this.
+cooldown-seconds: 5
+
+# Maximum number of images a single player may own (0 = unlimited). Admins bypass this.
+max-images-per-player: 100
+
+# Maximum base64 length accepted per image, including multi-part uploads.
+# 1,000,000 characters is roughly a 750 KB image file, far more than a map needs.
+max-base64-length: 1000000
+
+# Uploaded images bigger than this (in either direction / in total pixels) are rejected
+# before they are decoded, which protects the server from decompression bombs.
+max-image-dimension: 4096
+max-image-pixels: 16777216
+
+# Maximum size of files used with /mcimage file (bytes).
+max-file-bytes: 20000000
+
+# A multi-part upload (/mcimage <part> ... /mcimage done) is discarded after this many
+# seconds without a new part.
+upload-session-timeout-seconds: 600
+
+# How non-square images are placed on the 128x128 map:
+#   fit     - keep the aspect ratio, leave bars at the sides (filled with 'background')
+#   stretch - fill the whole map, distorting the image
+#   crop    - keep the aspect ratio, cut off whatever does not fit
+resize-mode: fit
+
+# Fill color for transparent areas and 'fit' bars: 'transparent' (shows the map paper)
+# or a hex color such as '#ffffff'.
+background: transparent
+
+# Floyd-Steinberg dithering gives photos far smoother gradients on the limited map
+# palette. Turn it off for pixel art with flat colors.
+dithering: true
+
+# Re-attach the image renderers to all known maps when the server starts. If disabled,
+# maps are restored lazily the first time they are loaded (slightly less startup work,
+# but a map could stay blank until it is next touched).
+preload-maps-on-startup: true
+
+# Entries per page for /mcimage list.
+list-page-size: 8
+
+# /mcimage url <link> downloads the image on the server. Needs the mcimage.url permission
+# (op by default).
+url:
+  enabled: true
+  timeout-seconds: 10
+  max-bytes: 5000000
+  # Refuse links that resolve to private, loopback or link-local addresses (SSRF protection).
+  allow-private-addresses: false
+  # If not empty, only these hosts (and their sub-domains) may be used, e.g. [imgur.com, i.imgur.com]
+  allowed-hosts: []
+  user-agent: "MCImage/1.0 (Paper plugin)"
+
+# ------------------------------------------------------------------------------
+#  Messages (MiniMessage format, see https://docs.papermc.io/adventure/minimessage/format/)
+#  Every message may use <prefix>. Other placeholders are listed per message in the README.
+#  Delete a line to fall back to the built-in default.
+# ------------------------------------------------------------------------------
+messages:
+  prefix: "<dark_gray>[<gradient:#5ee7df:#b490ca>MCImage</gradient>]</dark_gray> "
+  no-permission: "<prefix><red>You don't have permission to do that."
+  players-only: "<prefix><red>Only players can do that. From the console, use <white>/mcimage get [id] [player]</white> or <white>/mcimage [base64]</white>."
+  player-not-found: "<prefix><red>Player <white><name></white> is not online."
+  unknown-image: "<prefix><red>There is no image with the ID <white><id></white>."
+  invalid-id: "<prefix><red><white><input></white> is not a valid image ID."
+  cooldown: "<prefix><yellow>Please wait <white><seconds></white>s before creating another image."
+  limit-reached: "<prefix><red>You already have <white><count></white> images (limit <white><limit></white>). Delete one with <white>/mcimage delete [id]</white> first."
+  processing: "<prefix><gray>Processing your image..."
+  created: "<prefix><green>Created image <click:suggest_command:'/mcimage get <id>'><hover:show_text:'<gray>Click to put <white>/mcimage get <id></white> in your chat box'><white><bold>#<id></bold></white></hover></click> <dark_gray>(<gray><width>x<height> <format></gray>)</dark_gray> <click:copy_to_clipboard:'<id>'><hover:show_text:'<gray>Copy the ID to your clipboard'><dark_gray>[<aqua>copy ID</aqua>]</dark_gray></hover></click>"
+  created-no-item: "<prefix><gray>You are not holding a player's inventory, so no map was given. Use <white>/mcimage get <id> [player]</white> to hand it out."
+  given: "<prefix><green>Here is your map for image <white>#<id></white>."
+  given-other: "<prefix><green>Gave <white><player></white> a map for image <white>#<id></white>."
+  received: "<prefix><green>You received a map for image <white>#<id></white> from <white><sender></white>."
+  inventory-full: "<prefix><yellow>Your inventory was full, the map was dropped at your feet."
+  unknown-command: "<prefix><red>Unknown sub command <white><input></white>. See <white>/mcimage help</white>."
+  not-base64: "<prefix><red>That doesn't look like base64. Paste the base64 text of a PNG/JPEG, e.g. <white>/mcimage iVBORw0KGgo...</white>"
+  too-long: "<prefix><red>That upload is too large (<white><length></white> characters, limit <white><limit></white>)."
+  error-empty: "<prefix><red>No image data received."
+  error-unsupported-format: "<prefix><red>Unsupported image format <dark_gray>(<gray><detail></gray>)</dark_gray>. Use PNG, JPEG, GIF or BMP."
+  error-too-large: "<prefix><red>Image is too big (<white><detail></white>). Resize it before uploading."
+  error-corrupt: "<prefix><red>The image could not be decoded <dark_gray>(<gray><detail></gray>)</dark_gray>. If you pasted it in parts, make sure no part is missing."
+  error-io: "<prefix><red>Could not store the image on the server, see console."
+  error-download: "<prefix><red>Download failed: <white><detail></white>"
+  url-disabled: "<prefix><red>Creating images from URLs is disabled on this server."
+  file-not-found: "<prefix><red>No file named <white><name></white> in the import folder."
+  upload-started: "<prefix><yellow>Started a multi-part upload <dark_gray>(<gray>part 1, <chars> chars</gray>)</dark_gray>. <gray>Keep pasting the next parts with <white>/mcimage [next part]</white>, then run <white>/mcimage done</white>. <white>/mcimage cancel</white> aborts."
+  upload-part: "<prefix><gray>Received part <white><part></white> <dark_gray>(<gray><chars> chars total</gray>)</dark_gray>. Continue pasting or run <white>/mcimage done</white>."
+  upload-status: "<prefix><gray>Upload in progress: <white><part></white> part(s), <white><chars></white> chars. Finish with <white>/mcimage done</white> or <white>/mcimage cancel</white>."
+  upload-none: "<prefix><yellow>You have no upload in progress. Paste the first part with <white>/mcimage [base64]</white> or run <white>/mcimage begin</white>."
+  upload-begin: "<prefix><yellow>Ready for a multi-part upload. Paste each part with <white>/mcimage [part]</white> and finish with <white>/mcimage done</white>."
+  upload-cancelled: "<prefix><gray>Upload cancelled."
+  upload-expired: "<prefix><yellow>Your previous upload expired, starting a new one."
+  info-none: "<prefix><yellow>Hold a map created by MCImage to see its ID."
+  info: "<prefix><gray>This map shows image <click:suggest_command:'/mcimage get <id>'><white>#<id></white></click> <dark_gray>(<gray>by <owner>, <width>x<height>, <date></gray>)</dark_gray>"
+  list-header: "<prefix><gray>Images <dark_gray>(<gray><scope></gray>)</dark_gray> - page <white><page></white>/<white><pages></white>, <white><total></white> total"
+  list-entry: "<dark_gray> - </dark_gray><click:suggest_command:'/mcimage get <id>'><hover:show_text:'<gray>Click to get a copy'><white>#<id></white></hover></click> <gray>by <owner> <dark_gray>(<date>)</dark_gray>"
+  list-empty: "<prefix><gray>No images yet. Create one with <white>/mcimage [base64]</white>."
+  list-footer: "<dark_gray>Next page: <click:run_command:'<next-command>'><hover:show_text:'Click to show the next page'><gray><next-command></gray></hover></click>"
+  deleted: "<prefix><green>Deleted image <white>#<id></white>. Existing maps of it will now be blank."
+  not-owner: "<prefix><red>Image <white>#<id></white> belongs to someone else."
+  reloaded: "<prefix><green>Configuration reloaded."
+  help-header: "<prefix><gray>Commands <dark_gray>(v<version>)</dark_gray>:"
+  help-line: "<dark_gray> - </dark_gray><white><command></white> <gray><description>"
+  help-footer: "<dark_gray>Vanilla chat only sends 256 characters per command: paste bigger images in parts and finish with <gray>/mcimage done</gray>, or use the encoder tool shipped with the plugin."
+  item-name: "<!italic><white>Image <gray>#<id>"
+  item-lore: "<!italic><dark_gray>by <owner>"
