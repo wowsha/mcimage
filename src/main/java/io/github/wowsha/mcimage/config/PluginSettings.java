@@ -24,7 +24,8 @@ public record PluginSettings(
         boolean preloadMapsOnStartup,
         int listPageSize,
         UrlSettings url,
-        long maxFileBytes
+        long maxFileBytes,
+        UploadSettings upload
 ) {
 
     /** How a non-square image is placed on the 128x128 map. */
@@ -45,6 +46,17 @@ public record PluginSettings(
             boolean allowPrivateAddresses,
             List<String> allowedHosts,
             String userAgent
+    ) {
+    }
+
+    /** Settings for temporary browser-upload links and the embedded HTTP listener. */
+    public record UploadSettings(
+            boolean enabled,
+            String bindAddress,
+            int port,
+            String publicUrl,
+            int tokenLifetimeSeconds,
+            long maxBytes
     ) {
     }
 
@@ -74,6 +86,21 @@ public record PluginSettings(
             );
         }
 
+        ConfigurationSection uploadSection = config.getConfigurationSection("upload");
+        UploadSettings upload;
+        if (uploadSection == null) {
+            upload = new UploadSettings(true, "127.0.0.1", 8765, "", 600, 5_000_000L);
+        } else {
+            upload = new UploadSettings(
+                    uploadSection.getBoolean("enabled", true),
+                    uploadSection.getString("bind-address", "127.0.0.1"),
+                    clamp(uploadSection.getInt("port", 8765), 1024, 65535),
+                    uploadSection.getString("public-url", ""),
+                    clamp(uploadSection.getInt("token-lifetime-seconds", 600), 60, 3600),
+                    Math.max(1024L, Math.min(50_000_000L, uploadSection.getLong("max-bytes", 5_000_000L)))
+            );
+        }
+
         return new PluginSettings(
                 clamp(config.getInt("id-length", 6), 4, 32),
                 Math.max(0, config.getInt("cooldown-seconds", 5)),
@@ -88,7 +115,8 @@ public record PluginSettings(
                 config.getBoolean("preload-maps-on-startup", true),
                 clamp(config.getInt("list-page-size", 8), 1, 50),
                 url,
-                Math.max(1024L, config.getLong("max-file-bytes", 20_000_000L))
+                Math.max(1024L, config.getLong("max-file-bytes", 20_000_000L)),
+                upload
         );
     }
 

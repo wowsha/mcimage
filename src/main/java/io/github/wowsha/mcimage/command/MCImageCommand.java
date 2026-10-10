@@ -56,6 +56,7 @@ public final class MCImageCommand implements TabExecutor {
             new SubCommand("begin", "mcimage.create", "/mcimage begin", "Start a multi-part upload (optional)"),
             new SubCommand("cancel", "mcimage.create", "/mcimage cancel", "Cancel the upload in progress"),
             new SubCommand("status", "mcimage.create", "/mcimage status", "Show how much of the upload has arrived"),
+            new SubCommand("upload", "mcimage.create", "/mcimage upload", "Open a temporary browser upload page"),
             new SubCommand("get", "mcimage.get", "/mcimage get <id> [player]", "Get a map of an existing image"),
             new SubCommand("info", "mcimage.use", "/mcimage info", "Show the ID of the map you are holding"),
             new SubCommand("list", "mcimage.list", "/mcimage list [all|player] [page]", "List images"),
@@ -91,6 +92,7 @@ public final class MCImageCommand implements TabExecutor {
             case "done", "finish", "end" -> done(sender);
             case "cancel", "abort" -> cancel(sender);
             case "status" -> status(sender);
+            case "upload" -> browserUpload(sender);
             case "url" -> url(sender, args);
             case "file" -> file(sender, args);
             case "reload" -> reload(sender);
@@ -251,6 +253,34 @@ public final class MCImageCommand implements TabExecutor {
             return false;
         }
         return ImageSniffer.looksComplete(Base64Util.decode(normalized));
+    }
+
+    // ------------------------------------------------------------------ browser upload
+
+    private void browserUpload(CommandSender sender) {
+        if (!require(sender, "mcimage.create")) {
+            return;
+        }
+        Player player = asPlayer(sender);
+        if (player == null) {
+            return;
+        }
+        if (plugin.uploadServer() == null || !plugin.uploadServer().isRunning()) {
+            plugin.messages().send(player, "browser-upload-disabled");
+            return;
+        }
+        if (!canCreate(player)) {
+            return;
+        }
+
+        String link = plugin.uploadServer().createLink(player.getUniqueId());
+        if (link == null) {
+            plugin.messages().send(player, "browser-upload-unavailable");
+            return;
+        }
+        plugin.messages().send(player, "browser-upload-link",
+                Messages.command("url", link),
+                Messages.number("expires", plugin.uploadServer().tokenLifetimeSeconds()));
     }
 
     // ------------------------------------------------------------------ url / file
@@ -505,6 +535,10 @@ public final class MCImageCommand implements TabExecutor {
         messages.send(sender, "help-header", Messages.text("version", plugin.getPluginMeta().getVersion()));
         for (SubCommand sub : SUB_COMMANDS) {
             if (sub.name().equals("url") && !plugin.settings().url().enabled()) {
+                continue;
+            }
+            if (sub.name().equals("upload")
+                    && (plugin.uploadServer() == null || !plugin.uploadServer().isRunning())) {
                 continue;
             }
             if (sender.hasPermission(sub.permission())) {

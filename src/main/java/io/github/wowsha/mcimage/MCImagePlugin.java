@@ -9,6 +9,7 @@ import io.github.wowsha.mcimage.store.ImageRecord;
 import io.github.wowsha.mcimage.store.ImageStore;
 import io.github.wowsha.mcimage.text.Messages;
 import io.github.wowsha.mcimage.upload.UploadSessionManager;
+import io.github.wowsha.mcimage.upload.UploadWebServer;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
@@ -36,6 +37,7 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
     private ImageStore store;
     private MapArtService maps;
     private UploadSessionManager sessions;
+    private UploadWebServer uploadServer;
     private ImageDownloader downloader;
     private ImageCreator creator;
     private File importDir;
@@ -59,6 +61,8 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
         sessions = new UploadSessionManager();
         downloader = new ImageDownloader();
         creator = new ImageCreator(this);
+        uploadServer = new UploadWebServer(this);
+        uploadServer.start();
 
         PluginCommand command = getCommand("mcimage");
         if (command == null) {
@@ -85,6 +89,9 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (uploadServer != null) {
+            uploadServer.stop();
+        }
         if (sessions != null) {
             sessions.clear();
         }
@@ -110,6 +117,9 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         sessions.end(event.getPlayer().getUniqueId());
+        if (uploadServer != null) {
+            uploadServer.revoke(event.getPlayer().getUniqueId());
+        }
     }
 
     // ------------------------------------------------------------------ services
@@ -118,6 +128,9 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
         reloadConfig();
         settings = PluginSettings.load(getConfig(), getLogger());
         messages = new Messages(getConfig().getConfigurationSection("messages"), getLogger());
+        if (uploadServer != null) {
+            uploadServer.restart();
+        }
     }
 
     /** Debounced asynchronous save of {@code images.yml}. Safe to call from any thread. */
@@ -175,6 +188,40 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
 
     public UploadSessionManager sessions() {
         return sessions;
+    }
+
+    public UploadWebServer uploadServer() {
+        return uploadServer;
+    }
+
+    /**
+     * Browser-upload requests arrive on an HTTP worker thread and are dispatched here on
+     * the server thread. Re-check permissions, cooldown and quota before processing.
+     */
+    public boolean startBrowserCreation(org.bukkit.entity.Player player) {
+        if (!player.hasPermission("mcimage.create")) {
+            messages.send(player, "no-permission");
+            return false;
+        }
+        if (player.hasPermission("mcimage.admin")) {
+            return true;
+        }
+        long remaining = cooldownRemaining(player.getUniqueId());
+        if (remaining > 0) {
+            messages.send(player, "cooldown", Messages.number("seconds", remaining));
+            return false;
+        }
+        int limit = settings.maxImagesPerPlayer();
+        if (limit > 0) {
+            int count = store.countByOwner(player.getUniqueId());
+            if (count >= limit) {
+                messages.send(player, "limit-reached",
+                        Messages.number("count", count), Messages.number("limit", limit));
+                return false;
+            }
+        }
+        markCooldown(player.getUniqueId());
+        return true;
     }
 
     public ImageDownloader downloader() {

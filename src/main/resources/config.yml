@@ -68,6 +68,18 @@ url:
   allowed-hosts: []
   user-agent: "MCImage/1.0 (Paper plugin)"
 
+# Browser uploads use a temporary, single-use link. The public URL must be HTTPS and
+# point through a reverse proxy to this listener. Keep the listener bound to loopback.
+upload:
+  enabled: true
+  bind-address: "127.0.0.1"
+  port: 8765
+  # Example: https://upload.example.com (must be served by an HTTPS reverse proxy).
+  # Leave empty until the reverse proxy is configured; browser upload stays unavailable.
+  public-url: ""
+  token-lifetime-seconds: 600
+  max-bytes: 5000000
+
 # ------------------------------------------------------------------------------
 #  Messages (MiniMessage format, see https://docs.papermc.io/adventure/minimessage/format/)
 #  Every message may use <prefix>. Other placeholders are listed per message in the README.
@@ -99,6 +111,9 @@ messages:
   error-io: "<prefix><red>Could not store the image on the server, see console."
   error-download: "<prefix><red>Download failed: <white><detail></white>"
   url-disabled: "<prefix><red>Creating images from URLs is disabled on this server."
+  browser-upload-disabled: "<prefix><red>Browser upload is not configured. Ask an administrator to set upload.public-url and an HTTPS reverse proxy."
+  browser-upload-unavailable: "<prefix><red>Could not create an upload link. Ask an administrator to check the upload service."
+  browser-upload-link: "<prefix><green>Temporary upload link (expires in <expires>s): <click:open_url:'<url>'><aqua><underlined>Choose an image in your browser</underlined></aqua></click> <gray><url>"
   file-not-found: "<prefix><red>No file named <white><name></white> in the import folder."
   upload-started: "<prefix><yellow>Started a multi-part upload <dark_gray>(<gray>part 1, <chars> chars</gray>)</dark_gray>. <gray>Keep pasting the next parts with <white>/mcimage [next part]</white>, then run <white>/mcimage done</white>. <white>/mcimage cancel</white> aborts."
   upload-part: "<prefix><gray>Received part <white><part></white> <dark_gray>(<gray><chars> chars total</gray>)</dark_gray>. Continue pasting or run <white>/mcimage done</white>."
