@@ -1,0 +1,48 @@
+name: MCImage
+version: '${version}'
+main: io.github.wowsha.mcimage.MCImagePlugin
+api-version: '26.3'
+description: ${description}
+author: wowsha
+website: https://github.com/wowsha/mcimage
+
+commands:
+  mcimage:
+    description: Turn a base64-encoded image into map art, or fetch an existing image by ID
+    usage: /<command> help
+    aliases: [mcimg, imagemap]
+    permission: mcimage.use
+
+permissions:
+  mcimage.use:
+    description: Use /mcimage (help, info)
+    default: true
+  mcimage.create:
+    description: Create map art from base64 image data
+    default: true
+  mcimage.get:
+    description: Get a copy of an image by its ID
+    default: true
+  mcimage.list:
+    description: List your own images
+    default: true
+  mcimage.delete:
+    description: Delete your own images
+    default: true
+  mcimage.url:
+    description: Create map art from an image URL
+    default: op
+  mcimage.file:
+    description: Create map art from a file in plugins/MCImage/import
+    default: op
+  mcimage.admin:
+    description: Manage everyone's images, give maps to others, reload, bypass limits
+    default: op
+    children:
+      mcimage.use: true
+      mcimage.create: true
+      mcimage.get: true
+      mcimage.list: true
+      mcimage.delete: true
+      mcimage.url: true
+      mcimage.file: true

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MCImage encoder - image to /mcimage commands</title>
+<style>
+  :root { color-scheme: dark; --bg:#14161b; --panel:#1d2026; --line:#2c313a; --text:#e6e8ec; --muted:#9aa3b2; --accent:#5ee7df; --accent2:#b490ca; --ok:#6fd98a; --warn:#f3c969; --bad:#ff7b7b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:28px 24px 8px; max-width:1100px; margin:0 auto; }
+  h1 { margin:0 0 4px; font-size:26px; background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent; display:inline-block; }
+  header p { margin:0; color:var(--muted); }
+  main { max-width:1100px; margin:0 auto; padding:16px 24px 60px; display:grid; gap:16px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .panel h2 { margin:0 0 10px; font-size:16px; color:var(--accent); }
+  #drop { border:2px dashed var(--line); border-radius:12px; padding:28px; text-align:center; color:var(--muted); cursor:pointer; transition:border-color .15s, background .15s; }
+  #drop.over { border-color:var(--accent); background:#1a2a2a; }
+  #drop strong { color:var(--text); }
+  input[type=file] { display:none; }
+  .opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px 20px; }
+  label.opt { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+  label.opt select, label.opt input[type=text], label.opt input[type=number] { background:#0f1114; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
+  label.opt input[type=range] { width:100%; }
+  label.check { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--muted); }
+  .previews { display:flex; gap:24px; flex-wrap:wrap; align-items:flex-start; }
+  .preview { text-align:center; font-size:13px; color:var(--muted); }
+  .preview canvas { width:256px; height:256px; image-rendering:pixelated; border-radius:8px; border:1px solid var(--line); background:
+      repeating-conic-gradient(#2a2d33 0% 25%, #1b1d22 0% 50%) 0 0/16px 16px; display:block; margin-bottom:6px; }
+  .preview canvas.map { background:#d6be96; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+  .stat { background:#0f1114; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .stat b { display:block; font-size:20px; }
+  .stat span { font-size:12px; color:var(--muted); }
+  .stat.warn b { color:var(--warn); }
+  .stat.ok b { color:var(--ok); }
+  button { background:#262b34; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 12px; font:inherit; cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:linear-gradient(90deg,#1f6f6a,#5e3f78); border-color:transparent; font-weight:600; }
+  button.primary:hover { filter:brightness(1.15); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  textarea { width:100%; min-height:80px; background:#0f1114; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px; font:12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; resize:vertical; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  #parts { display:flex; flex-direction:column; gap:6px; max-height:420px; overflow:auto; padding-right:4px; }
+  .part { display:flex; gap:8px; align-items:center; background:#0f1114; border:1px solid var(--line); border-radius:8px; padding:6px 8px; font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .part.done { border-color:#2f6b45; opacity:.7; }
+  .part.next { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .part .n { color:var(--muted); min-width:34px; }
+  .part .cmd { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .part button { padding:3px 9px; font-size:12px; }
+  .note { color:var(--muted); font-size:13px; }
+  .note code, .steps code { background:#0f1114; border:1px solid var(--line); border-radius:5px; padding:1px 5px; font-size:12px; }
+  .steps { margin:0; padding-left:20px; color:var(--muted); font-size:13px; }
+  .steps li { margin:2px 0; }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px); background:#1f2a24; border:1px solid #2f6b45; color:var(--ok); padding:8px 14px; border-radius:10px; opacity:0; transition:all .2s; pointer-events:none; }
+  #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>MCImage encoder</h1>
+  <p>Turn any picture into <code>/mcimage</code> commands. Everything happens in your browser - nothing is uploaded anywhere.</p>
+</header>
+<main>
+  <section class="panel">
+    <h2>1. Pick an image</h2>
+    <div id="drop" tabindex="0">
+      <strong>Drop an image here</strong>, click to browse, or paste one with <strong>Ctrl+V</strong> / <strong>Cmd+V</strong><br>
+      <span>PNG, JPEG, GIF, BMP, WebP - it will be resized to 128x128 (one map)</span>
+    </div>
+    <input id="file" type="file" accept="image/*">
+  </section>
+
+  <section class="panel" id="options">
+    <h2>2. Options</h2>
+    <div class="opts">
+      <label class="opt">Resize mode
+        <select id="mode">
+          <option value="fit">fit - keep aspect ratio, server fills the bars</option>
+          <option value="crop">crop - keep aspect ratio, cut the edges</option>
+          <option value="stretch">stretch - fill the whole map</option>
+        </select>
+      </label>
+      <label class="opt">File format
+        <select id="format">
+          <option value="auto">auto - smallest of PNG / JPEG</option>
+          <option value="jpeg">JPEG (photos)</option>
+          <option value="png">PNG (pixel art, transparency)</option>
+        </select>
+      </label>
+      <label class="opt">JPEG quality: <span id="qv">0.75</span>
+        <input id="quality" type="range" min="0.3" max="0.95" step="0.05" value="0.75">
+      </label>
+      <label class="opt">Command
+        <input id="cmd" type="text" value="/mcimage" spellcheck="false">
+      </label>
+      <label class="opt">Max characters per chat message
+        <input id="maxlen" type="number" min="64" max="32767" value="256">
+      </label>
+      <label class="check"><input id="dither" type="checkbox" checked> Preview with dithering (server default)</label>
+      <label class="check"><input id="begin" type="checkbox" checked> Start with <code>/mcimage begin</code> (recommended)</label>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="result">
+    <h2>3. Preview</h2>
+    <div class="previews">
+      <div class="preview"><canvas id="cResized" width="128" height="128"></canvas>what gets encoded</div>
+      <div class="preview"><canvas id="cMap" width="128" height="128" class="map"></canvas>how it will look on the map</div>
+      <div style="flex:1; min-width:260px">
+        <div class="stats">
+          <div class="stat"><b id="sBytes">-</b><span>file size</span></div>
+          <div class="stat"><b id="sChars">-</b><span>base64 characters</span></div>
+          <div class="stat" id="sPartsBox"><b id="sParts">-</b><span>chat commands needed</span></div>
+          <div class="stat"><b id="sFormat">-</b><span>format</span></div>
+        </div>
+        <p class="note" style="margin-top:10px">Smaller is better: every ~247 characters is one chat message. Lower the JPEG quality, or use <code>crop</code> for a square cut-out, to need fewer parts.</p>
+        <div class="row">
+          <button id="download">Download 128x128 file (for /mcimage file)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel hidden" id="chat">
+    <h2>4. Paste into Minecraft chat, one command at a time</h2>
+    <ol class="steps">
+      <li>Click <strong>Copy next</strong> (or the copy button of a line), press <code>T</code> in game, paste with <code>Ctrl+V</code>, press <code>Enter</code>.</li>
+      <li>Repeat until the last line (<code>/mcimage done</code>) - the plugin joins the parts and hands you the map.</li>
+      <li>Lost track? <code>/mcimage status</code> shows how many parts arrived, <code>/mcimage cancel</code> starts over.</li>
+    </ol>
+    <div class="row">
+      <button id="copyNext" class="primary">Copy next (1 / 1)</button>
+      <button id="resetProgress">Reset progress</button>
+      <span class="note" id="progressNote"></span>
+    </div>
+    <div id="parts"></div>
+  </section>
+
+  <section class="panel hidden" id="single">
+    <h2>Alternative: one single command</h2>
+    <p class="note">The server accepts commands up to <strong>32,767</strong> characters, but the <em>vanilla</em> chat box stops at 256. Use this from the <strong>server console</strong> (without the leading slash), a <strong>command block</strong>, RCON, or a client mod that lifts the chat limit.</p>
+    <textarea id="singleCmd" readonly spellcheck="false"></textarea>
+    <div class="row">
+      <button id="copySingle">Copy single command</button>
+      <button id="copyB64">Copy base64 only</button>
+      <span class="note" id="singleNote"></span>
+    </div>
+  </section>
+</main>
+<div id="toast">Copied!</div>
+
+<script>
+(function () {
+  'use strict';
+  // Minecraft map palette (248 colours, 4 shades per base colour), taken from Paper 26.3 MapPalette. -1 = transparent.
+  var PALETTE = [-1,-1,-1,-1,5864743,7182640,8368696,4415005,11445363,14010764,16247203,8551254,9211020,11250603,13092807,6908265,11796480,14417920,16711680,8847360,7368884,9079516,10526975,5526663,7697781,9474192,10987431,5789784,22272,27136,31744,16640,11842740,14474460,16777215,8882055,7566977,9277598,10791096,5658721,6966326,8543810,9923917,5191976,5197647,6316128,7368816,3881787,2960820,3618780,4210943,2171271,6575154,8087102,9402184,4931366,11841964,14473683,16776437,8881537,9984292,12217644,14188339,7488283,8205720,10043834,11685080,6170738,4746392,5801146,6724056,3559794,10592548,12961068,15066419,7960859,5869585,7188501,8375321,4418573,11164020,13659534,15892389,8405847,3487029,4276545,5000268,2631720,7105644,8684676,10066329,5329233,3496300,4287876,5013401,2638673,5844093,7157401,8339378,4399454,2372989,2900377,3361970,1779806,4732196,5783852,6704179,3549211,4741412,5795116,6717235,3556123,7087140,8662060,10040115,5315355,1118481,1381653,1644825,855309,11577398,14142786,16445005,8683048,4233878,5225655,6085589,3175280,3431092,4157148,4882687,2573191,39208,47922,55610,29214,5979170,7293482,8476209,4467993,5177600,6291712,7340544,3866880,9665649,11835530,13742497,7232853,7354649,8996383,10441252,5516051,6896972,8407901,9787244,5123641,5196897,6315383,7367818,3881289,8609049,10514975,12223780,6440467,4739621,5792813,6780213,3554588,7353911,9060931,10505550,5515305,2628632,3220254,3746083,1971474,6245189,7625812,8874850,4667443,4014144,4935503,5725276,3026992,5649214,6897227,8014168,4204078,3484480,4273487,4996700,2629680,3482392,4270878,4993571,2628114,3488029,4277796,5001770,2632470,6564384,8008487,9321518,4923160,1707787,2036237,2430480,1248008,8724770,10692906,12398641,6560025,6827076,8336979,9715553,5120307,4198676,5182745,6035741,3149071,1005662,1207411,1474182,737862,2647138,3308152,3837580,1985354,3940139,4859189,5647422,2955040,950109,1153906,1356933,679750,4605510,5658198,6579300,3421236,9993063,12228222,14200723,7494733,5862761,7180417,8365974,4413519];
+  var MAP = 128;
+
+  // ---------------------------------------------------------------- palette matching (same maths as Paper's MapPalette#getDistance)
+  function distance(r1, g1, b1, r2, g2, b2) {
+    var rsum = r1 + r2, r = r1 - r2, g = g1 - g2, b = b1 - b2;
+    var wr = 1024 + rsum, wg = 2048, wb = 1024 + (255 * 2 - rsum);
+    return wr * r * r + wg * g * g + wb * b * b;
+  }
+  var cache = new Map();
+  function nearest(r, g, b) {
+    var key = (r << 16) | (g << 8) | b;
+    var hit = cache.get(key);
+    if (hit !== undefined) return hit;
+    var best = -1, bestIdx = 4;
+    for (var i = 4; i < PALETTE.length; i++) {
+      var c = PALETTE[i];
+      var d = distance(r, g, b, (c >> 16) & 255, (c >> 8) & 255, c & 255);
+      if (best < 0 || d < best) { best = d; bestIdx = i; }
+    }
+    cache.set(key, bestIdx);
+    return bestIdx;
+  }
+
+  // Quantize ARGB pixels to palette colours, optionally with Floyd-Steinberg dithering. Returns RGBA bytes.
+  function toMapPreview(rgba, w, h, dither) {
+    var out = new Uint8ClampedArray(rgba.length);
+    var stride = (w + 2) * 3, cur = new Float32Array(stride), next = new Float32Array(stride);
+    for (var y = 0; y < h; y++) {
+      next.fill(0);
+      for (var x = 0; x < w; x++) {
+        var i = (y * w + x) * 4, bi = (x + 1) * 3;
+        if (rgba[i + 3] < 128) { out[i + 3] = 0; continue; }
+        var r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
+        if (dither) { r = clamp(r + Math.round(cur[bi])); g = clamp(g + Math.round(cur[bi + 1])); b = clamp(b + Math.round(cur[bi + 2])); }
+        var c = PALETTE[nearest(r, g, b)];
+        var nr = (c >> 16) & 255, ng = (c >> 8) & 255, nb = c & 255;
+        out[i] = nr; out[i + 1] = ng; out[i + 2] = nb; out[i + 3] = 255;
+        if (dither) {
+          var er = r - nr, eg = g - ng, eb = b - nb;
+          diffuse(cur, bi + 3, er, eg, eb, 7 / 16); diffuse(next, bi - 3, er, eg, eb, 3 / 16);
+          diffuse(next, bi, er, eg, eb, 5 / 16); diffuse(next, bi + 3, er, eg, eb, 1 / 16);
+        }
+      }
+      var t = cur; cur = next; next = t;
+    }
+    return out;
+  }
+  function diffuse(buf, i, er, eg, eb, f) { buf[i] += er * f; buf[i + 1] += eg * f; buf[i + 2] += eb * f; }
+  function clamp(v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+  // ---------------------------------------------------------------- resizing
+  function targetSize(w, h, mode) {
+    if (mode === 'fit') {
+      var s = Math.min(MAP / w, MAP / h);
+      return { w: Math.max(1, Math.round(w * s)), h: Math.max(1, Math.round(h * s)) };
+    }
+    return { w: MAP, h: MAP };
+  }
+  // progressive halving gives much nicer downscales than one big drawImage step
+  function resample(source, sw, sh, sx, sy, cw, ch, dw, dh) {
+    var cv = document.createElement('canvas');
+    cv.width = cw; cv.height = ch;
+    var ctx = cv.getContext('2d');
+    ctx.drawImage(source, sx, sy, cw, ch, 0, 0, cw, ch);
+    var w = cw, h = ch;
+    while (w / 2 >= dw && h / 2 >= dh) {
+      w = Math.floor(w / 2); h = Math.floor(h / 2);
+      var step = document.createElement('canvas');
+      step.width = w; step.height = h;
+      var sctx = step.getContext('2d');
+      sctx.imageSmoothingEnabled = true; sctx.imageSmoothingQuality = 'high';
+      sctx.drawImage(cv, 0, 0, w, h);
+      cv = step;
+    }
+    var out = document.createElement('canvas');
+    out.width = dw; out.height = dh;
+    var octx = out.getContext('2d');
+    var upscale = cw <= dw && ch <= dh;
+    octx.imageSmoothingEnabled = !(upscale && dw % cw === 0 && dh % ch === 0);
+    octx.imageSmoothingQuality = 'high';
+    octx.drawImage(cv, 0, 0, dw, dh);
+    return out;
+  }
+  function render(img, mode) {
+    var sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height;
+    var sx = 0, sy = 0, cw = sw, ch = sh;
+    if (mode === 'crop') {
+      var s = Math.max(MAP / sw, MAP / sh);
+      cw = Math.max(1, Math.min(sw, Math.round(MAP / s)));
+      ch = Math.max(1, Math.min(sh, Math.round(MAP / s)));
+      sx = Math.floor((sw - cw) / 2); sy = Math.floor((sh - ch) / 2);
+    }
+    var t = targetSize(cw, ch, mode);
+    return resample(img, sw, sh, sx, sy, cw, ch, t.w, t.h);
+  }
+
+  // ---------------------------------------------------------------- encoding / chunking
+  function hasTransparency(canvas) {
+    var d = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    for (var i = 3; i < d.length; i += 4) if (d[i] < 255) return true;
+    return false;
+  }
+  function encode(canvas, format, quality) {
+    var transparent = hasTransparency(canvas);
+    var png = canvas.toDataURL('image/png').split(',')[1];
+    if (format === 'png' || (format === 'auto' && transparent)) return { b64: png, format: 'png' };
+    var jpg = canvas.toDataURL('image/jpeg', quality).split(',')[1];
+    if (format === 'jpeg') return { b64: jpg, format: 'jpeg', flattened: transparent };
+    return jpg.length < png.length ? { b64: jpg, format: 'jpeg' } : { b64: png, format: 'png' };
+  }
+  function chunk(b64, size) {
+    var parts = [];
+    for (var i = 0; i < b64.length; i += size) parts.push(b64.substring(i, i + size));
+    return parts;
+  }
+  function buildCommands(b64, cmd, maxLen, withBegin) {
+    var prefix = cmd + ' ';
+    var size = Math.max(16, maxLen - prefix.length);
+    var list = [];
+    if (withBegin) list.push(cmd + ' begin');
+    chunk(b64, size).forEach(function (p) { list.push(prefix + p); });
+    list.push(cmd + ' done');
+    return list;
+  }
+
+  // ---------------------------------------------------------------- UI
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { img: null, name: 'image', resized: null, encoded: null, commands: [], progress: 0 };
+
+  var drop = $('drop'), fileInput = $('file');
+  drop.addEventListener('click', function () { fileInput.click(); });
+  drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+  fileInput.addEventListener('change', function () { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+  ['dragenter', 'dragover'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+  ['dragleave', 'drop'].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+  drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) loadFile(f); });
+  document.addEventListener('paste', function (e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') === 0) { loadFile(items[i].getAsFile()); e.preventDefault(); return; }
+    }
+  });
+
+  function loadFile(file) {
+    if (!file || file.type.indexOf('image') !== 0 && !/\.(png|jpe?g|gif|bmp|webp)$/i.test(file.name)) { alert('Please choose an image file.'); return; }
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () { URL.revokeObjectURL(url); state.img = img; state.name = (file.name || 'image').replace(/\.[^.]+$/, ''); state.progress = 0; update(); };
+    img.onerror = function () { URL.revokeObjectURL(url); alert('This file could not be read as an image.'); };
+    img.src = url;
+  }
+
+  ['mode', 'format', 'quality', 'cmd', 'maxlen', 'dither', 'begin'].forEach(function (id) {
+    $(id).addEventListener('input', function () { $('qv').textContent = Number($('quality').value).toFixed(2); state.progress = 0; update(); });
+  });
+
+  function update() {
+    if (!state.img) return;
+    var mode = $('mode').value;
+    var resized = render(state.img, mode);
+    state.resized = resized;
+
+    // preview: what gets encoded
+    var pc = $('cResized'), pctx = pc.getContext('2d');
+    pctx.clearRect(0, 0, MAP, MAP);
+    pctx.drawImage(resized, Math.floor((MAP - resized.width) / 2), Math.floor((MAP - resized.height) / 2));
+
+    // preview: map look (server letterboxes 'fit' images with transparent = paper)
+    var rgba = pctx.getImageData(0, 0, MAP, MAP).data;
+    var mapped = toMapPreview(rgba, MAP, MAP, $('dither').checked);
+    var mc = $('cMap'), mctx = mc.getContext('2d');
+    mctx.putImageData(new ImageData(mapped, MAP, MAP), 0, 0);
+
+    var enc = encode(resized, $('format').value, Number($('quality').value));
+    state.encoded = enc;
+    var cmd = ($('cmd').value.trim() || '/mcimage');
+    var maxLen = Math.max(64, Math.min(32767, Number($('maxlen').value) || 256));
+    state.commands = buildCommands(enc.b64, cmd, maxLen, $('begin').checked);
+
+    var bytes = Math.floor(enc.b64.length * 3 / 4);
+    $('sBytes').textContent = bytes >= 1024 ? (bytes / 1024).toFixed(1) + ' KB' : bytes + ' B';
+    $('sChars').textContent = enc.b64.length.toLocaleString();
+    var dataParts = state.commands.length - 1 - ($('begin').checked ? 1 : 0);
+    $('sParts').textContent = dataParts;
+    $('sPartsBox').className = 'stat ' + (dataParts <= 12 ? 'ok' : dataParts <= 40 ? 'warn' : '');
+    $('sFormat').textContent = enc.format.toUpperCase() + ' ' + resized.width + 'x' + resized.height + (enc.flattened ? ' (transparency flattened)' : '');
+
+    renderParts();
+    var single = cmd + ' ' + enc.b64;
+    $('singleCmd').value = single;
+    var ok = single.length <= 32767;
+    $('singleNote').textContent = ok ? single.length.toLocaleString() + ' characters - fits in one server command.' : single.length.toLocaleString() + ' characters - too long even for the console (32,767 max); lower the quality or use the parts above.';
+    $('copySingle').disabled = !ok;
+
+    $('result').classList.remove('hidden'); $('chat').classList.remove('hidden'); $('single').classList.remove('hidden');
+  }
+
+  function renderParts() {
+    var box = $('parts');
+    box.innerHTML = '';
+    state.commands.forEach(function (c, i) {
+      var row = document.createElement('div');
+      row.className = 'part' + (i < state.progress ? ' done' : i === state.progress ? ' next' : '');
+      var n = document.createElement('span'); n.className = 'n'; n.textContent = (i + 1) + '.';
+      var text = document.createElement('span'); text.className = 'cmd'; text.textContent = c; text.title = c;
+      var btn = document.createElement('button'); btn.textContent = 'Copy';
+      btn.addEventListener('click', function () { copy(c, 'Copied command ' + (i + 1)); state.progress = i + 1; renderParts(); });
+      row.appendChild(n); row.appendChild(text); row.appendChild(btn);
+      box.appendChild(row);
+    });
+    var total = state.commands.length, done = Math.min(state.progress, total);
+    $('copyNext').textContent = done >= total ? 'All copied - start over?' : 'Copy next (' + (done + 1) + ' / ' + total + ')';
+    $('progressNote').textContent = done >= total ? 'Finished! Your map should be in your inventory.' : done === 0 ? 'Paste each command into chat in order.' : done + ' of ' + total + ' pasted';
+    var nextRow = box.children[done];
+    if (nextRow) nextRow.scrollIntoView({ block: 'nearest' });
+  }
+  $('copyNext').addEventListener('click', function () {
+    if (state.progress >= state.commands.length) { state.progress = 0; renderParts(); return; }
+    var i = state.progress;
+    copy(state.commands[i], 'Copied command ' + (i + 1) + ' of ' + state.commands.length);
+    state.progress = i + 1; renderParts();
+  });
+  $('resetProgress').addEventListener('click', function () { state.progress = 0; renderParts(); });
+  $('copySingle').addEventListener('click', function () { copy($('singleCmd').value, 'Copied the full command'); });
+  $('copyB64').addEventListener('click', function () { copy(state.encoded.b64, 'Copied the base64 text'); });
+  $('download').addEventListener('click', function () {
+    var a = document.createElement('a');
+    a.href = 'data:image/' + state.encoded.format + ';base64,' + state.encoded.b64;
+    a.download = state.name + '-128.' + (state.encoded.format === 'jpeg' ? 'jpg' : 'png');
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+
+  var toastTimer;
+  function copy(text, msg) {
+    var done = function () { var t = $('toast'); t.textContent = msg || 'Copied!'; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1400); };
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); }); }
+    else { fallbackCopy(text); done(); }
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (e) {} ta.remove();
+  }
+
+  // expose pure helpers for tests
+  if (typeof module !== 'undefined') module.exports = { nearest: nearest, toMapPreview: toMapPreview, chunk: chunk, buildCommands: buildCommands, targetSize: targetSize, PALETTE: PALETTE };
+})();
+</script>
+</body>
+</html>

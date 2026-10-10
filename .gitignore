@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+bin/
+out/
+
+# run-paper test server
+run/
+
+# OS
+.DS_Store
+Thumbs.db
