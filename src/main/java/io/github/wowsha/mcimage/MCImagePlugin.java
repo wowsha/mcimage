@@ -17,7 +17,12 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.entity.EntityPickupItemEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.MapInitializeEvent;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -111,6 +116,34 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
         ImageRecord record = store.byMapId(event.getMap().getId());
         if (record != null) {
             maps.ensureRendered(record, event.getMap());
+        }
+    }
+
+    /**
+     * MCImage map items are ordinary filled maps. Some item-protection plugins cancel drops
+     * based on custom names or persistent data, so explicitly allow a player to drop an
+     * MCImage map as they would any other map.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onImageDrop(PlayerDropItemEvent event) {
+        if (maps != null && maps.recordFromItem(event.getItemDrop().getItemStack()) != null) {
+            event.setCancelled(false);
+        }
+    }
+
+    /**
+     * Do not make MCImage items fireproof or otherwise special: if a dropped image item
+     * is damaged by lava/fire, it should be destroyed like a normal filled map.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onImageItemDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.Item item)) {
+            return;
+        }
+        if (maps != null && maps.recordFromItem(item.getItemStack()) != null
+                && (event.getCause() == DamageCause.LAVA || event.getCause() == DamageCause.FIRE
+                || event.getCause() == DamageCause.FIRE_TICK || event.getCause() == DamageCause.HOT_FLOOR)) {
+            event.setCancelled(false);
         }
     }
 
