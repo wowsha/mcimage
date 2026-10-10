@@ -8,7 +8,7 @@ website: https://github.com/wowsha/mcimage
 
 commands:
   mcimage:
-    description: Turn a base64-encoded image into map art, or fetch an existing image by ID
+    description: Turn an image into map art, upload from a browser, or fetch an existing image by ID
     usage: /<command> help
     aliases: [mcimg, imagemap]
     permission: mcimage.use

@@ -24,6 +24,9 @@ drawn onto a locked map item by a custom renderer.
   like `0/o/1/l` are never used). Chat messages contain click-to-copy / click-to-suggest
   links, and the ID is also written on the map item (name, lore and persistent data).
 - **`/mcimage get <id>`** - a copy for yourself, or for another player / from the console.
+- **Browser uploads** - `/mcimage upload` gives the player a temporary, single-use browser
+  link where they can choose an image file instead of pasting Base64 (requires an HTTPS
+  reverse proxy; see [Browser upload](#browser-upload)).
 - **Multi-part uploads** - the vanilla chat box only sends 256 characters per command, so
   longer images are pasted in several parts and finished with `/mcimage done`. The plugin
   detects partial pastes automatically; no special syntax is needed.
@@ -103,6 +106,36 @@ A typical 128x128 JPEG is 4-8 KB, i.e. 25-45 chat messages at quality 0.75; use 
 lower the JPEG quality or simpler pictures if you want fewer parts. Console, RCON, command
 blocks and clients with a raised chat limit can send the whole thing in one command (the
 server accepts up to 32,767 characters).
+
+### Browser upload
+
+Players can avoid Base64 entirely with `/mcimage upload`. MCImage sends a clickable link
+that opens a file picker in the browser; after upload, the plugin runs the same image
+validation and processing pipeline and gives the player a map. Links are random, single-use,
+expire after ten minutes by default, and are invalidated when another link is requested or
+the player disconnects. The upload size and image dimensions are still capped by server
+settings.
+
+The embedded listener speaks HTTP and binds to `127.0.0.1:8765` by default. **For public
+use, put it behind an HTTPS reverse proxy** and configure the public base URL. Example
+`plugins/MCImage/config.yml` settings:
+
+```yaml
+upload:
+  enabled: true
+  bind-address: "127.0.0.1"
+  port: 8765
+  public-url: "https://upload.example.com"
+  token-lifetime-seconds: 600
+  max-bytes: 5000000
+```
+
+Configure your proxy's `https://upload.example.com` virtual host to forward requests to
+`http://127.0.0.1:8765` while preserving the request path. Keep the HTTP listener private;
+do not expose the bearer-token upload endpoint directly over plain HTTP. After configuring
+the proxy, run `/mcimage reload` or restart the server. Browser upload appears in
+`/mcimage help` only when the listener starts successfully. Set `upload.enabled: false`
+to disable it.
 
 ### The encoder tool
 

@@ -9,6 +9,7 @@ import io.github.wowsha.mcimage.store.ImageRecord;
 import io.github.wowsha.mcimage.store.ImageStore;
 import io.github.wowsha.mcimage.text.Messages;
 import io.github.wowsha.mcimage.upload.UploadSessionManager;
+import io.github.wowsha.mcimage.upload.UploadWebServer;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,7 +17,11 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.MapInitializeEvent;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -36,6 +41,7 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
     private ImageStore store;
     private MapArtService maps;
     private UploadSessionManager sessions;
+    private UploadWebServer uploadServer;
     private ImageDownloader downloader;
     private ImageCreator creator;
     private File importDir;
@@ -59,6 +65,8 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
         sessions = new UploadSessionManager();
         downloader = new ImageDownloader();
         creator = new ImageCreator(this);
+        uploadServer = new UploadWebServer(this);
+        uploadServer.start();
 
         PluginCommand command = getCommand("mcimage");
         if (command == null) {
@@ -85,6 +93,9 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        if (uploadServer != null) {
+            uploadServer.stop();
+        }
         if (sessions != null) {
             sessions.clear();
         }
@@ -107,9 +118,47 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
         }
     }
 
+    /**
+     * MCImage map items are ordinary filled maps. Some item-protection plugins cancel drops
+     * based on custom names or persistent data, so explicitly allow a player to drop an
+     * MCImage map as they would any other map.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onImageDrop(PlayerDropItemEvent event) {
+        org.bukkit.entity.Item dropped = event.getItemDrop();
+        if (maps != null && maps.recordFromItem(dropped.getItemStack()) != null) {
+            // Keep the drop in the world instead of letting it be picked straight back up
+            // or locked to its thrower by creative-inventory/server-specific drop behavior.
+            event.setCancelled(false);
+            dropped.setOwner(null);
+            dropped.setPickupDelay(Math.max(dropped.getPickupDelay(), 40));
+            dropped.setUnlimitedLifetime(false);
+            dropped.setWillAge(true);
+        }
+    }
+
+    /**
+     * Do not make MCImage items fireproof or otherwise special: if a dropped image item
+     * is damaged by lava/fire, it should be destroyed like a normal filled map.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
+    public void onImageItemDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof org.bukkit.entity.Item item)) {
+            return;
+        }
+        if (maps != null && maps.recordFromItem(item.getItemStack()) != null
+                && (event.getCause() == DamageCause.LAVA || event.getCause() == DamageCause.FIRE
+                || event.getCause() == DamageCause.FIRE_TICK || event.getCause() == DamageCause.HOT_FLOOR)) {
+            event.setCancelled(false);
+        }
+    }
+
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         sessions.end(event.getPlayer().getUniqueId());
+        if (uploadServer != null) {
+            uploadServer.revoke(event.getPlayer().getUniqueId());
+        }
     }
 
     // ------------------------------------------------------------------ services
@@ -118,6 +167,9 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
         reloadConfig();
         settings = PluginSettings.load(getConfig(), getLogger());
         messages = new Messages(getConfig().getConfigurationSection("messages"), getLogger());
+        if (uploadServer != null) {
+            uploadServer.restart();
+        }
     }
 
     /** Debounced asynchronous save of {@code images.yml}. Safe to call from any thread. */
@@ -175,6 +227,40 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
 
     public UploadSessionManager sessions() {
         return sessions;
+    }
+
+    public UploadWebServer uploadServer() {
+        return uploadServer;
+    }
+
+    /**
+     * Browser-upload requests arrive on an HTTP worker thread and are dispatched here on
+     * the server thread. Re-check permissions, cooldown and quota before processing.
+     */
+    public boolean startBrowserCreation(org.bukkit.entity.Player player) {
+        if (!player.hasPermission("mcimage.create")) {
+            messages.send(player, "no-permission");
+            return false;
+        }
+        if (player.hasPermission("mcimage.admin")) {
+            return true;
+        }
+        long remaining = cooldownRemaining(player.getUniqueId());
+        if (remaining > 0) {
+            messages.send(player, "cooldown", Messages.number("seconds", remaining));
+            return false;
+        }
+        int limit = settings.maxImagesPerPlayer();
+        if (limit > 0) {
+            int count = store.countByOwner(player.getUniqueId());
+            if (count >= limit) {
+                messages.send(player, "limit-reached",
+                        Messages.number("count", count), Messages.number("limit", limit));
+                return false;
+            }
+        }
+        markCooldown(player.getUniqueId());
+        return true;
     }
 
     public ImageDownloader downloader() {

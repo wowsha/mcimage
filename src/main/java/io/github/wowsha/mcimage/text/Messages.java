@@ -48,6 +48,9 @@ public final class Messages {
         DEFAULTS.put("error-io", "<prefix><red>Could not store the image on the server, see console.");
         DEFAULTS.put("error-download", "<prefix><red>Download failed: <white><detail></white>");
         DEFAULTS.put("url-disabled", "<prefix><red>Creating images from URLs is disabled on this server.");
+        DEFAULTS.put("browser-upload-disabled", "<prefix><red>Browser upload is not configured. Ask an administrator to set upload.public-url and an HTTPS reverse proxy.");
+        DEFAULTS.put("browser-upload-unavailable", "<prefix><red>Could not create an upload link. Ask an administrator to check the upload service.");
+        DEFAULTS.put("browser-upload-link", "<prefix><green>Temporary upload link (expires in <expires>s): <click:open_url:'<url>'><aqua><underlined>Choose an image in your browser</underlined></aqua></click> <gray><url>");
         DEFAULTS.put("file-not-found", "<prefix><red>No file named <white><name></white> in the import folder.");
         DEFAULTS.put("upload-started", "<prefix><yellow>Started a multi-part upload <dark_gray>(<gray>part 1, <chars> chars</gray>)</dark_gray>. <gray>Keep pasting the next parts with <white>/mcimage [next part]</white>, then run <white>/mcimage done</white>. <white>/mcimage cancel</white> aborts.");
         DEFAULTS.put("upload-part", "<prefix><gray>Received part <white><part></white> <dark_gray>(<gray><chars> chars total</gray>)</dark_gray>. Continue pasting or run <white>/mcimage done</white>.");
