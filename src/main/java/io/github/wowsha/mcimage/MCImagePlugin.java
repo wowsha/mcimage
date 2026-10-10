@@ -125,8 +125,15 @@ public final class MCImagePlugin extends JavaPlugin implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = false)
     public void onImageDrop(PlayerDropItemEvent event) {
-        if (maps != null && maps.recordFromItem(event.getItemDrop().getItemStack()) != null) {
+        org.bukkit.entity.Item dropped = event.getItemDrop();
+        if (maps != null && maps.recordFromItem(dropped.getItemStack()) != null) {
+            // Keep the drop in the world instead of letting it be picked straight back up
+            // or locked to its thrower by creative-inventory/server-specific drop behavior.
             event.setCancelled(false);
+            dropped.setOwner(null);
+            dropped.setPickupDelay(Math.max(dropped.getPickupDelay(), 40));
+            dropped.setUnlimitedLifetime(false);
+            dropped.setWillAge(true);
         }
     }
 
